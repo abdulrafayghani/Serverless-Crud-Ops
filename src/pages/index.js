@@ -1,5 +1,5 @@
-import React, { useState } from "react"
-import { gql, useMutation, useQuery } from "@apollo/client"
+import React, { useState, useEffect } from "react"
+import axios from "axios"
 import { Box, Button, makeStyles, TextField } from "@material-ui/core"
 import List from "@material-ui/core/List"
 import ListItem from "@material-ui/core/ListItem"
@@ -12,31 +12,7 @@ import DeleteIcon from "@material-ui/icons/Delete"
 import Grid from "@material-ui/core/Grid"
 import Typography from "@material-ui/core/Typography"
 import FormatListBulletedIcon from "@material-ui/icons/FormatListBulleted"
-
-const allTodos = gql`
-  {
-    allTodos {
-      todo
-      id
-    }
-  }
-`
-
-const addTodo = gql`
-  mutation addTodo($todo: String!) {
-    addTodo(todo: $todo) {
-      todo
-    }
-  }
-`
-
-const deleteTodo = gql`
-  mutation deleteTodo($id: String!) {
-    discardTodo(id: $id) {
-      id
-    }
-  }
-`
+import UpdateIcon from '@material-ui/icons/Update';
 
 const useStyles = makeStyles(theme => ({
   root: {
@@ -52,71 +28,117 @@ const useStyles = makeStyles(theme => ({
 }))
 
 export default function Home() {
-  const { loading, data, refetch } = useQuery(allTodos)
-  const [createTodo, { loading: adding}] = useMutation(addTodo)
-  const [discardTodo, { loading: deleting}] = useMutation(deleteTodo)
-  const [todoVal, setTodoVal] = useState("")
+  const [todo, setTodo] = useState("")
+  const [id, setId] = useState("")
+  const [todos, setTodos] = useState([])
+  const [isUpdate, setIsUpdate] = useState(false)
+  const [updating, setUpdating] = useState(false)
+  const [adding, setAdding] = useState(false)
+  const [removing, setRemoving] = useState(false)
+  
+  const classes = useStyles()
+
+  useEffect(() => {
+    (async () => {
+      const result = await axios.get(`/.netlify/functions/getTodos`)
+      setTodos(result.data)
+    })()
+  }, [todo, removing, adding, updating])
 
   const handleSubmit = async () => {
-    await createTodo({ variables: { todo: todoVal } })
-    await refetch()
+    setAdding(true)
+    const result = await axios.post(`/.netlify/functions/addTodo`, { todo })
+    setAdding(false)
+    setTodo("")
   }
 
   const handleDelete = async id => {
-    console.log(id)
-    await discardTodo({ variables: { id: id } })
-    await refetch()
+    setRemoving(true)
+    const result = await axios.delete(`/.netlify/functions/deleteTodo`, {
+      data: {
+        id
+      }
+    })
+    setRemoving(false)
+    setTodo("")
   }
 
-  const classes = useStyles()
-
-  if (loading) {
-    return <h1> ...laoding</h1>
+  const handleUpadte = async (todo, id) => {
+    setUpdating(true)
+    const result = await axios.put(`/.netlify/functions/updateTodo`, { todo, id })
+    setIsUpdate(false)
+    setUpdating(false)
+    setTodo("")
   }
-
 
   return (
-    <div className={classes.root}>
-      <h1> Todo App Gatsby</h1>
-      <div style={{ display: "flex", justifyContent: "center" }}>
-        <Box width="55%">
-          <TextField
-            fullWidth
-            variant="outlined"
-            label="Add todo"
-            onChange={e => setTodoVal(e.target.value)}
-          />
-        </Box>
-        <Button onClick={handleSubmit}>ADD</Button>
-        {adding && <p style={{fontWeight : "bold"}}>adding data ...</p>}
+      <div className={classes.root}>
+        <h1> Try Your Crud Ops </h1>
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <Box width="55%">
+            <TextField
+              value={todo}
+              fullWidth
+              variant="outlined"
+              label={isUpdate ? "Update Todo" : "Add Todo"}
+              onChange={e => setTodo(e.target.value)}
+            />
+          </Box>
+          <Button onClick={() => {
+            { isUpdate ? (
+              handleUpadte(todo, id)
+            ) : (
+              handleSubmit()
+            )}
+          }}> {isUpdate ? "UPDATE" : "ADD"} </Button>
+          {adding && <p style={{ fontWeight: "bold" }}>adding data ...</p>}
+          {updating && <p style={{ fontWeight: "bold" }}>updating data ...</p>}
+        </div>
+        <div style={{ display: "flex", justifyContent: "center" }}>
+          <Grid item xs={12} md={6}>
+            <Typography variant="h6" className={classes.title}></Typography>
+            <div className={classes.demo}>
+              <List>
+                {todos.map(item => {
+                  return (
+                    <ListItem key={item.ref["@ref"].id}>
+                      <ListItemAvatar>
+                        <Avatar>
+                          <FormatListBulletedIcon />
+                        </Avatar>
+                      </ListItemAvatar>
+                      <ListItemText> {item.data.todo} </ListItemText>
+                      <ListItemSecondaryAction>
+                        <IconButton
+                          edge="end"
+                          aria-label="delete"
+                          onClick={() => {
+                            handleDelete(item.ref["@ref"].id)
+                          }}
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                        <IconButton
+                          edge="end"
+                          aria-label="update"
+                          onClick={() => {
+                            setIsUpdate(true)
+                            setId(item.ref["@ref"].id)
+                          }}
+                          >
+                          <UpdateIcon />
+                        </IconButton>
+                      </ListItemSecondaryAction>
+                    </ListItem>
+                  )
+                })}
+              </List>
+              {removing && (
+                <p style={{ fontWeight: "bold" }}>removing data ...</p>
+              )}
+            </div>
+          </Grid>
+        </div>
       </div>
-      <div style={{ display: "flex", justifyContent: "center" }}>
-        <Grid item xs={12} md={6}>
-          <Typography variant="h6" className={classes.title}></Typography>
-          <div className={classes.demo}>
-            <List>
-              {data.allTodos.map(item => {
-                return (
-                  <ListItem key={item.id}>
-                    <ListItemAvatar>
-                      <Avatar>
-                        <FormatListBulletedIcon />
-                      </Avatar>
-                    </ListItemAvatar>
-                    <ListItemText> {item.todo} </ListItemText>
-                    <ListItemSecondaryAction>
-                      <IconButton edge="end" aria-label="delete" onClick={() => {handleDelete(item.id)}} >
-                        <DeleteIcon />
-                      </IconButton>
-                    </ListItemSecondaryAction>
-                  </ListItem>
-                )
-              })}
-            </List>
-            {deleting && <p style={{fontWeight : "bold"}}>removing data ...</p>}
-          </div>
-        </Grid>
-      </div>
-    </div>
   )
 }
