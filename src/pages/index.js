@@ -43,7 +43,7 @@ export default function Home() {
       const result = await axios.get(`/.netlify/functions/getTodos`)
       setTodos(result.data)
     })()
-  }, [todo, removing, adding, updating])
+  }, [removing, adding, updating])
 
   const handleSubmit = async () => {
     setAdding(true)
